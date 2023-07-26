@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/exp/slices"
+	"golang.org/x/sync/errgroup"
 )
 
 // change below global variables to control the testing scale
@@ -274,6 +277,10 @@ func checkConsistConflict(store *KvStore) error {
 func main() {
 	now := time.Now()
 	allRowsNum := len(col1Value) * len(col2Value) * len(col3Value)
+	var workers errgroup.Group
+	workers.SetLimit(runtime.NumCPU())
+
+	var firstErrorCase atomic.Pointer[[]string]
 	for i := uint64(0); i < uint64(math.Pow(float64(allRowsNum), float64(numInsert))); i++ {
 		rows := make([]string, numInsert)
 		cur := i
@@ -285,17 +292,25 @@ func main() {
 			col3 := rowIndexes % uint64(len(col3Value))
 			rows[j] = fmt.Sprintf("%v,%v,%v", col1Value[col1], col2Value[col2], col3Value[col3])
 		}
-		store := initializeKVStore(rows)
-		if checkConsistConflict(store) == nil {
-			continue
-		}
-		replaceConflict(store)
-		err := checkConsistConflict(store)
-		if err != nil {
-			fmt.Println(rows)
-			store.print()
-			panic(fmt.Sprintf("checkConsistConflict failed: %+v", err))
-		}
+		workers.Go(func() error {
+			if firstErrorCase.Load() != nil {
+				return nil
+			}
+			store := initializeKVStore(rows)
+			if checkConsistConflict(store) == nil {
+				return nil
+			}
+			replaceConflict(store)
+			err := checkConsistConflict(store)
+			if err != nil {
+				firstErrorCase.CompareAndSwap(nil, &rows)
+			}
+			return err
+		})
+	}
+	if err := workers.Wait(); err != nil {
+		fmt.Println(*firstErrorCase.Load())
+		panic(fmt.Sprintf("checkConsistConflict failed: %+v", err))
 	}
 	fmt.Println(time.Since(now))
 }
