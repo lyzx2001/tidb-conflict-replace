@@ -181,6 +181,7 @@ func checkConsistConflict(store *KvStore) error {
 				)
 			}
 			// check the indexed value is in the PK's value. "ix_" has length 3
+			// that is checking the orphan index KV
 			if !slices.Contains(strings.Split(pkValue.value, ","), key[3:]) {
 				return errors.Errorf(
 					"KV pair {key: %s, value: %s} exists, but the indexed value %s is not in the PK's value %s",
