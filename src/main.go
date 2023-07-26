@@ -11,11 +11,11 @@ import (
 
 // change below global variables to control the testing scale
 var (
-	col1Value = []int{1, 2, 3, 4}
-	col2Value = []string{"a", "b", "c", "d"}
+	col1Value = []int{1, 2, 3}
+	col2Value = []string{"a", "b", "c"}
 	col3Value = []int{11, 22, 33}
 
-	numInsert = 3
+	numInsert = 5
 )
 
 type MVCCValue struct {
@@ -114,7 +114,73 @@ func encodeKV(value string) []KVPair {
 	return KVPairs
 }
 
-func replaceConflict() {
+func replaceConflict(store *KvStore) {
+	// check index KV first
+	for key, values := range store.m {
+		if key[0] != 'i' {
+			continue
+		}
+		if len(values) == 1 {
+			continue
+		}
+		for i := 0; i < len(values)-1; i++ {
+			overwritten := values[i]
+			pk := "r" + overwritten.value
+			rowKV, ok := store.getLatest(pk)
+			if !ok {
+				panic("should not happen")
+			}
+			if rowKV.isDelete {
+				continue
+			}
+			encoded := encodeKV(rowKV.value)
+			this := KVPair{
+				key,
+				overwritten.value,
+			}
+			if slices.Contains(encoded, this) {
+				store.delete(pk)
+			}
+		}
+	}
+	// check data KV
+	for key, values := range store.m {
+		if key[0] != 'r' {
+			continue
+		}
+		if len(values) == 1 {
+			continue
+		}
+		latestValue := values[len(values)-1]
+		toBeChecked := make([]MVCCValue, 0, len(values)-1)
+		var mustKeep []KVPair
+		if latestValue.isDelete {
+			toBeChecked = append(toBeChecked, latestValue)
+		} else {
+			mustKeep = encodeKV(latestValue.value)
+		}
+		toBeChecked = append(toBeChecked, values[:len(values)-1]...)
+
+		for _, v := range toBeChecked {
+			if v.value == latestValue.value {
+				continue
+			}
+			encodedKVs := encodeKV(v.value)
+			for _, encodedKV := range encodedKVs {
+				latestKV, ok := store.getLatest(encodedKV.key)
+				if !ok {
+					continue
+				}
+				if latestKV.value != encodedKV.value {
+					continue
+				}
+				if slices.Contains(mustKeep, encodedKV) {
+					continue
+				}
+				store.delete(encodedKV.key)
+			}
+		}
+	}
 
 }
 
@@ -124,6 +190,14 @@ func (s *KvStore) getLatest(key string) (MVCCValue, bool) {
 		return MVCCValue{}, false
 	}
 	return values[len(values)-1], true
+}
+
+func (s *KvStore) delete(key string) {
+	s.globalTS++
+	s.m[key] = append(s.m[key], MVCCValue{
+		ts:       s.globalTS,
+		isDelete: true,
+	})
 }
 
 func checkConsistConflict(store *KvStore) error {
@@ -207,7 +281,7 @@ func main() {
 			rows[j] = fmt.Sprintf("%v,%v,%v", col1Value[col1], col2Value[col2], col3Value[col3])
 		}
 		store := initializeKVStore(rows)
-		//replaceConflict()
+		replaceConflict(store)
 		err := checkConsistConflict(store)
 		if err != nil {
 			fmt.Println(rows)
