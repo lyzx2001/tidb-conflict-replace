@@ -19,7 +19,7 @@ var (
 	col2Value = []string{"a", "b", "c"}
 	col3Value = []int{11, 22, 33}
 
-	numInsert = 5
+	numInsert = 6
 )
 
 type MVCCValue struct {
