@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -50,28 +51,28 @@ type KVPair struct {
 	value string
 }
 
-func initializeKVStore() *KvStore {
+func initializeKVStore(rows []string) *KvStore {
 	store := NewKVStore()
 
-	for _, val1 := range col1Value {
-		for _, val2 := range col2Value {
-			for _, val3 := range col3Value {
-				// for data KV, key will start with "r", followed by the real key
-				newKey := fmt.Sprintf("r%d", val1)
-				newValue := fmt.Sprintf("%d,%s,%d", val1, val2, val3)
-				store.set(newKey, newValue)
+	for _, r := range rows {
+		tuple := strings.Split(r, ",")
+		val1, val2, val3 := tuple[0], tuple[1], tuple[2]
 
-				// for index KV, key will start with "i", followed by indexID, then the real index value (PK)
-				newKey = fmt.Sprintf("i1_%s", val2)
-				newValue = fmt.Sprintf("%d", val1)
-				store.set(newKey, newValue)
+		// for data KV, key will start with "r", followed by the real key
+		newKey := fmt.Sprintf("r%s", val1)
+		newValue := fmt.Sprintf("%s,%s,%s", val1, val2, val3)
+		store.set(newKey, newValue)
 
-				newKey = fmt.Sprintf("i2_%d", val3)
-				newValue = fmt.Sprintf("%d", val1)
-				store.set(newKey, newValue)
-			}
-		}
+		// for index KV, key will start with "i", followed by indexID, then the real index value (PK)
+		newKey = fmt.Sprintf("i1_%s", val2)
+		newValue = fmt.Sprintf("%s", val1)
+		store.set(newKey, newValue)
+
+		newKey = fmt.Sprintf("i2_%s", val3)
+		newValue = fmt.Sprintf("%s", val1)
+		store.set(newKey, newValue)
 	}
+
 	return store
 }
 
@@ -87,7 +88,7 @@ func (s *KvStore) print() {
 
 // convert data KV value to KV pairs that contain all the data KV and index KV of this data
 func encodeKV(value string) []KVPair {
-	KVPairs := make([]KVPair, 3)
+	KVPairs := make([]KVPair, 0, 3)
 	tuple := strings.Split(value, ",")
 	// encode data KV
 	key := tuple[0]
@@ -194,11 +195,25 @@ func checkConsistConflict(store *KvStore) error {
 }
 
 func main() {
-	store := initializeKVStore()
-	//replaceConflict()
-	err := checkConsistConflict(store)
-	if err != nil {
-		store.print()
-		panic(fmt.Sprintf("checkConsistConflict failed: %+v", err))
+	allRowsNum := len(col1Value) * len(col2Value) * len(col3Value)
+	for i := uint64(0); i < uint64(math.Pow(float64(allRowsNum), float64(numInsert))); i++ {
+		rows := make([]string, numInsert)
+		cur := i
+		for j := 0; j < numInsert; j++ {
+			rowIndexes := cur % uint64(allRowsNum)
+			cur = cur / uint64(allRowsNum)
+			col1 := rowIndexes / uint64(len(col2Value)*len(col3Value))
+			col2 := (rowIndexes % uint64(len(col2Value)*len(col3Value))) / uint64(len(col3Value))
+			col3 := rowIndexes % uint64(len(col3Value))
+			rows[j] = fmt.Sprintf("%v,%v,%v", col1Value[col1], col2Value[col2], col3Value[col3])
+		}
+		store := initializeKVStore(rows)
+		//replaceConflict()
+		err := checkConsistConflict(store)
+		if err != nil {
+			fmt.Println(rows)
+			store.print()
+			panic(fmt.Sprintf("checkConsistConflict failed: %+v", err))
+		}
 	}
 }
