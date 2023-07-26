@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/exp/slices"
@@ -169,6 +170,9 @@ func replaceConflict(store *KvStore) {
 			for _, encodedKV := range encodedKVs {
 				latestKV, ok := store.getLatest(encodedKV.key)
 				if !ok {
+					panic("should not happen")
+				}
+				if latestKV.isDelete {
 					continue
 				}
 				if latestKV.value != encodedKV.value {
@@ -268,6 +272,7 @@ func checkConsistConflict(store *KvStore) error {
 }
 
 func main() {
+	now := time.Now()
 	allRowsNum := len(col1Value) * len(col2Value) * len(col3Value)
 	for i := uint64(0); i < uint64(math.Pow(float64(allRowsNum), float64(numInsert))); i++ {
 		rows := make([]string, numInsert)
@@ -281,6 +286,9 @@ func main() {
 			rows[j] = fmt.Sprintf("%v,%v,%v", col1Value[col1], col2Value[col2], col3Value[col3])
 		}
 		store := initializeKVStore(rows)
+		if checkConsistConflict(store) == nil {
+			continue
+		}
 		replaceConflict(store)
 		err := checkConsistConflict(store)
 		if err != nil {
@@ -289,4 +297,5 @@ func main() {
 			panic(fmt.Sprintf("checkConsistConflict failed: %+v", err))
 		}
 	}
+	fmt.Println(time.Since(now))
 }
