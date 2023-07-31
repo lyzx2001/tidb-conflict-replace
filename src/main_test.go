@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/stretchr/testify/require"
+	"testing"
+)
 
 func checkConsistKey(t *testing.T, store *KvStore, key string) {
 	mvcc, ok := store.getLatest(key)
@@ -12,21 +15,26 @@ func checkConsistKey(t *testing.T, store *KvStore, key string) {
 	}
 }
 
-func TestCover(t *testing.T) {
+func TestCover1(t *testing.T) {
 	rows := []string{
 		"1,A,a",
 		"1,A,b",
 	}
 	store := initializeKVStore(rows)
-	if checkConsistConflict(store) == nil {
+	numOfKV, err := checkConsistConflict(store)
+	if err == nil {
 		t.FailNow()
 	}
+	require.Equal(t, 0, numOfKV)
 	replaceConflict(store)
-	err := checkConsistConflict(store)
+	numOfKV, err = checkConsistConflict(store)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+	require.Equal(t, 3, numOfKV)
 	checkConsistKey(t, store, "r1")
+	checkConsistKey(t, store, "i1_A")
+	checkConsistKey(t, store, "i2_b")
 }
 
 func TestCover2(t *testing.T) {
@@ -39,14 +47,17 @@ func TestCover2(t *testing.T) {
 		"2,D,d",
 	}
 	store := initializeKVStore(rows)
-	if checkConsistConflict(store) == nil {
+	numOfKV, err := checkConsistConflict(store)
+	if err == nil {
 		t.FailNow()
 	}
+	require.Equal(t, 0, numOfKV)
 	replaceConflict(store)
-	err := checkConsistConflict(store)
+	numOfKV, err = checkConsistConflict(store)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+	require.Equal(t, 6, numOfKV)
 	checkConsistKey(t, store, "r1")
 	checkConsistKey(t, store, "r2")
 	checkConsistKey(t, store, "i1_B")

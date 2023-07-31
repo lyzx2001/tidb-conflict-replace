@@ -191,7 +191,6 @@ func replaceConflict(store *KvStore) {
 			}
 		}
 	}
-
 }
 
 func (s *KvStore) getLatest(key string) (MVCCValue, bool) {
@@ -210,7 +209,8 @@ func (s *KvStore) delete(key string) {
 	})
 }
 
-func checkConsistConflict(store *KvStore) error {
+func checkConsistConflict(store *KvStore) (int, error) {
+	numOfKV := 0
 	for key, values := range store.m {
 		// find the value with maximum ts (the one with maximum ts is the real value of this key, others have been replaced by it)
 		// since the MVCCValue struct with larger ts was appended to values later, we just need to retrieve the last one in values
@@ -218,6 +218,7 @@ func checkConsistConflict(store *KvStore) error {
 		if values[len(values)-1].isDelete {
 			continue
 		}
+		numOfKV++
 		// check data KV
 		if key[0] == 'r' {
 			// find the value with maximum ts from values
@@ -227,20 +228,20 @@ func checkConsistConflict(store *KvStore) error {
 				latest, ok := store.getLatest(kv.key)
 				// assert ok == true
 				if !ok {
-					return errors.Errorf(
+					return 0, errors.Errorf(
 						"KV pair {key: %s, value: %s} exists, but key %s does not exist",
 						key, latestValue, kv.key,
 					)
 				}
 				if latest.isDelete {
-					return errors.Errorf(
+					return 0, errors.Errorf(
 						"KV pair {key: %s, value: %s} exists, but key %s is deleted",
 						key, latestValue, kv.key,
 					)
 				}
 				// assert latest value of latest should be same as kv.value
 				if latest.value != kv.value {
-					return errors.Errorf(
+					return 0, errors.Errorf(
 						"KV pair {key: %s, value: %s} exists, but the key %s is inconsistent. want %s, got %s",
 						key, latestValue, kv.key, kv.value, latest.value,
 					)
@@ -254,13 +255,13 @@ func checkConsistConflict(store *KvStore) error {
 			// assert latestValue (PK) correctly exists in KVStore
 			pkValue, ok := store.getLatest("r" + latestValue)
 			if !ok {
-				return errors.Errorf(
+				return 0, errors.Errorf(
 					"KV pair {key: %s, value: %s} exists, but key %s does not exist",
 					key, latestValue, "r"+latestValue,
 				)
 			}
 			if pkValue.isDelete {
-				return errors.Errorf(
+				return 0, errors.Errorf(
 					"KV pair {key: %s, value: %s} exists, but key %s is deleted",
 					key, latestValue, "r"+latestValue,
 				)
@@ -268,14 +269,19 @@ func checkConsistConflict(store *KvStore) error {
 			// check the indexed value is in the PK's value. "ix_" has length 3
 			// that is checking the orphan index KV
 			if !slices.Contains(strings.Split(pkValue.value, ","), key[3:]) {
-				return errors.Errorf(
+				return 0, errors.Errorf(
 					"KV pair {key: %s, value: %s} exists, but the indexed value %s is not in the PK's value %s",
 					key, latestValue, key[3:], pkValue.value,
 				)
 			}
 		}
 	}
-	return nil
+	if numOfKV == 0 {
+		return 0, errors.Errorf(
+			"No KV pair exists",
+		)
+	}
+	return numOfKV, nil
 }
 
 func main() {
@@ -301,11 +307,12 @@ func main() {
 				return nil
 			}
 			store := initializeKVStore(rows)
-			if checkConsistConflict(store) == nil {
+			_, err := checkConsistConflict(store)
+			if err == nil {
 				return nil
 			}
 			replaceConflict(store)
-			err := checkConsistConflict(store)
+			_, err = checkConsistConflict(store)
 			if err != nil {
 				firstErrorCase.CompareAndSwap(nil, &rows)
 			}
