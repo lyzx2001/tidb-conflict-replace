@@ -299,7 +299,8 @@ func mockInsertReplace(rows [][]string) int {
 			mapCol1[val1] = true
 			mapCol2[val2] = true
 			mapCol3[val3] = true
-			numOfKV++
+			// every row contains 1 data KV and 2 index KVs
+			numOfKV += 3
 		}
 	}
 	return numOfKV
