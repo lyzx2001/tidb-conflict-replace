@@ -2,6 +2,16 @@ package main
 
 import "testing"
 
+func checkConsistKey(t *testing.T, store *KvStore, key string) {
+	mvcc, ok := store.getLatest(key)
+	if !ok {
+		t.Fatal()
+	}
+	if mvcc.isDelete {
+		t.Fatal()
+	}
+}
+
 func TestCover(t *testing.T) {
 	rows := []string{
 		"1,A,a",
@@ -16,13 +26,7 @@ func TestCover(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	mvcc, ok := store.getLatest("r1")
-	if !ok {
-		t.Fatal()
-	}
-	if mvcc.isDelete {
-		t.Fatal()
-	}
+	checkConsistKey(t, store, "r1")
 }
 
 func TestCover2(t *testing.T) {
@@ -43,46 +47,10 @@ func TestCover2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	mvcc, ok := store.getLatest("r1")
-	if !ok {
-		t.Fatal()
-	}
-	if mvcc.isDelete {
-		t.Fatal()
-	}
-	mvcc, ok = store.getLatest("r2")
-	if !ok {
-		t.Fatal()
-	}
-	if mvcc.isDelete {
-		t.Fatal()
-	}
-	mvcc, ok = store.getLatest("i1_B")
-	if !ok {
-		t.Fatal()
-	}
-	if mvcc.isDelete {
-		t.Fatal()
-	}
-	mvcc, ok = store.getLatest("i1_D")
-	if !ok {
-		t.Fatal()
-	}
-	if mvcc.isDelete {
-		t.Fatal()
-	}
-	mvcc, ok = store.getLatest("i2_a")
-	if !ok {
-		t.Fatal()
-	}
-	if mvcc.isDelete {
-		t.Fatal()
-	}
-	mvcc, ok = store.getLatest("i2_d")
-	if !ok {
-		t.Fatal()
-	}
-	if mvcc.isDelete {
-		t.Fatal()
-	}
+	checkConsistKey(t, store, "r1")
+	checkConsistKey(t, store, "r2")
+	checkConsistKey(t, store, "i1_B")
+	checkConsistKey(t, store, "i1_D")
+	checkConsistKey(t, store, "i2_a")
+	checkConsistKey(t, store, "i2_d")
 }
