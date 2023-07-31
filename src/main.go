@@ -129,6 +129,9 @@ func replaceConflict(store *KvStore) {
 		}
 		for i := 0; i < len(values)-1; i++ {
 			overwritten := values[i]
+			if overwritten.value == values[len(values)-1].value {
+				continue
+			}
 			pk := "r" + overwritten.value
 			rowKV, ok := store.getLatest(pk)
 			if !ok {
