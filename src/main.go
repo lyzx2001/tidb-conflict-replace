@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -284,6 +285,26 @@ func checkConsistConflict(store *KvStore) (int, error) {
 	return numOfKV, nil
 }
 
+func mockInsertReplace(rows [][]string) int {
+	numOfKV := 0
+	mapCol1 := make(map[string]bool)
+	mapCol2 := make(map[string]bool)
+	mapCol3 := make(map[string]bool)
+	for _, r := range rows {
+		val1, val2, val3 := r[0], r[1], r[2]
+		_, ok1 := mapCol1[val1]
+		_, ok2 := mapCol2[val2]
+		_, ok3 := mapCol3[val3]
+		if !ok1 && !ok2 && !ok3 {
+			mapCol1[val1] = true
+			mapCol2[val2] = true
+			mapCol3[val3] = true
+			numOfKV++
+		}
+	}
+	return numOfKV
+}
+
 func main() {
 	now := time.Now()
 	allRowsNum := len(col1Value) * len(col2Value) * len(col3Value)
@@ -293,6 +314,7 @@ func main() {
 	var firstErrorCase atomic.Pointer[[]string]
 	for i := uint64(0); i < uint64(math.Pow(float64(allRowsNum), float64(numInsert))); i++ {
 		rows := make([]string, numInsert)
+		rowsForMock := make([][]string, numInsert)
 		cur := i
 		for j := 0; j < numInsert; j++ {
 			rowIndexes := cur % uint64(allRowsNum)
@@ -301,6 +323,7 @@ func main() {
 			col2 := (rowIndexes % uint64(len(col2Value)*len(col3Value))) / uint64(len(col3Value))
 			col3 := rowIndexes % uint64(len(col3Value))
 			rows[j] = fmt.Sprintf("%v,%v,%v", col1Value[col1], col2Value[col2], col3Value[col3])
+			rowsForMock[j] = []string{strconv.Itoa(col1Value[col1]), col2Value[col2], strconv.Itoa(col3Value[col3])}
 		}
 		workers.Go(func() error {
 			if firstErrorCase.Load() != nil {
@@ -312,9 +335,14 @@ func main() {
 				return nil
 			}
 			replaceConflict(store)
-			_, err = checkConsistConflict(store)
+			var numOfKV int
+			numOfKV, err = checkConsistConflict(store)
 			if err != nil {
 				firstErrorCase.CompareAndSwap(nil, &rows)
+			}
+			mockNumOfKV := mockInsertReplace(rowsForMock)
+			if numOfKV != mockNumOfKV {
+				panic(fmt.Sprintf("The number of KV pairs in KvStore is incorrect. Expected: %d, actual: %d", mockNumOfKV, numOfKV))
 			}
 			return err
 		})
