@@ -65,3 +65,40 @@ func TestCover2(t *testing.T) {
 	checkConsistKey(t, store, "i2_a")
 	checkConsistKey(t, store, "i2_d")
 }
+
+func TestCoverWithMock(t *testing.T) {
+	rows := []string{
+		"1,A,a",
+		"1,A,b",
+		"1,B,a",
+		"1,B,b",
+		"2,A,a",
+		"2,A,b",
+		"2,B,a",
+		"2,B,b",
+	}
+	rowsForMock := [][]string{
+		{"1", "A", "a"},
+		{"1", "A", "b"},
+		{"1", "B", "a"},
+		{"1", "B", "b"},
+		{"2", "A", "a"},
+		{"2", "A", "b"},
+		{"2", "B", "a"},
+		{"2", "B", "b"},
+	}
+	store := initializeKVStore(rows)
+	numOfKV, err := checkConsistConflict(store)
+	if err == nil {
+		t.FailNow()
+	}
+	require.Equal(t, 0, numOfKV)
+	replaceConflict(store)
+	numOfKV, err = checkConsistConflict(store)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	require.Equal(t, 3, numOfKV)
+	mockNumOfKV := mockInsertReplace(rowsForMock)
+	require.Equal(t, 6, mockNumOfKV)
+}

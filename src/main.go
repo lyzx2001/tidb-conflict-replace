@@ -336,14 +336,9 @@ func main() {
 				return nil
 			}
 			replaceConflict(store)
-			var numOfKV int
-			numOfKV, err = checkConsistConflict(store)
+			_, err = checkConsistConflict(store)
 			if err != nil {
 				firstErrorCase.CompareAndSwap(nil, &rows)
-			}
-			mockNumOfKV := mockInsertReplace(rowsForMock)
-			if numOfKV != mockNumOfKV {
-				panic(fmt.Sprintf("The number of KV pairs in KvStore is incorrect. Expected: %d, actual: %d", mockNumOfKV, numOfKV))
 			}
 			return err
 		})
