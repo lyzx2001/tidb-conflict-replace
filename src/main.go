@@ -160,16 +160,12 @@ func replaceConflict(store *KvStore) {
 			continue
 		}
 		latestValue := values[len(values)-1]
-		toBeChecked := make([]MVCCValue, 0, len(values)-1)
 		var mustKeep []KVPair
-		if latestValue.isDelete {
-			toBeChecked = append(toBeChecked, latestValue)
-		} else {
+		if !latestValue.isDelete {
 			mustKeep = encodeKV(latestValue.value)
 		}
-		toBeChecked = append(toBeChecked, values[:len(values)-1]...)
 
-		for _, v := range toBeChecked {
+		for _, v := range values {
 			if v.value == latestValue.value {
 				continue
 			}
